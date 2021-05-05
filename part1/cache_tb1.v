@@ -1,4 +1,7 @@
 `timescale 1ns / 1ns
+`include "cache_p1.v"
+`include "memory.v"
+//`include "datamem.txt"
 
 module cache_tb;
 
@@ -21,6 +24,7 @@ module cache_tb;
 	wire 	   	bus_wr;
 	wire [4:0] 	bus_addr;
 	
+	reg[16*8:0] op;	
 	// bus output
 	wire [15:0] bus_din;
 	wire 	   	bus_done;
@@ -74,16 +78,18 @@ module cache_tb;
 	end
 	
   always #1 clk = ~clk;
-	
 	initial begin
 		// Initialize Inputs
 		clk = 0;
 		rst = 1;
+		pr_rd=0;
+		pr_wr=0;
 		#CYCLETIME;
 		rst = 0;
 		#CYCLETIME;
 		
 		// LW @1; 1
+		op = "0:Load @1";
 		pr_din = 8'bzzzzzzzz;
 		pr_addr=1; 
 		pr_rd=1;
@@ -94,8 +100,8 @@ module cache_tb;
 		wait(pr_dout == 8'h01);
 		wait(cache.data[0] == 8'h00);
 		wait(cache.data[1] == 8'h01);
-		
 		// SW 12@9;  
+		op = "1:Store 12@9";
 		pr_addr=9;
 		pr_rd=0;
 		pr_wr=1;
@@ -108,6 +114,7 @@ module cache_tb;
 		wait(cache.data[1] == 8'h0c);
 		
 		// SW 13@9;
+		op = "2:Store 13@9";
 		pr_addr=9;
 		pr_rd=0;
 		pr_wr=1;
@@ -120,6 +127,7 @@ module cache_tb;
 		wait(cache.data[1] == 8'h0d);
 		
 		// SW 14@1; WB 13-> mem[9], 4-> cache
+		op = "3:Store 14@1";
 		pr_addr=1;
 		pr_rd=0;
 		pr_wr=1;
@@ -132,6 +140,7 @@ module cache_tb;
 		wait(cache.data[1] == 8'h0e);
 		
 		// LW @9; WB 14-> mem[1], mem[9]=13 -> Cache  
+		op = "4:Load @9";
 		pr_din = 8'bzzzzzzzz;
 		pr_addr=9;
 		pr_rd=1;
@@ -145,6 +154,7 @@ module cache_tb;
 		wait(pr_dout == 8'h0d);
 		
 		// LW @8; Hit!
+		op = "5:Load @8";
 		pr_din = 8'bzzzzzzzz;
 		pr_addr=8;
 		pr_rd=1;
@@ -156,6 +166,7 @@ module cache_tb;
 		wait(pr_dout == 8'h08);
 		
 		// SW 17@4 ; Miss
+		op = "6:Store 17@4";
 		pr_addr=4;
 		pr_rd=0;
 		pr_wr=1;
@@ -168,6 +179,7 @@ module cache_tb;
 		wait(cache.data[5] == 8'h05);
 		
 		// LW @9 ; Hit
+		op = "7:Load @9";
 		pr_din = 8'bzzzzzzzz;
 		pr_addr=9;
 		pr_rd=1;
@@ -179,6 +191,7 @@ module cache_tb;
 		wait(pr_dout == 8'h0d);
 		
 		// LW @13 ; WB 17->mem[4], mem[13] -> Cache
+		op = "8:Load @13";
 		pr_din = 8'bzzzzzzzz;
 		pr_addr=13;
 		pr_rd=1;
@@ -191,15 +204,20 @@ module cache_tb;
 		wait(cache.data[5] == 8'h0d);
 		wait(pr_dout == 8'h0d);
 		
+		op = "9:End";
 		pr_din = 8'bzzzzzzzz;
 		pr_rd=0;
 		pr_wr=0;
 
 		
 		#10;
-		$stop();
+		$finish;
 	end
-      
+	integer i;     
+	initial begin
+		$recordfile("waveform_direct_cache.trn");
+		$recordvars();
+	end
 endmodule
 
 
