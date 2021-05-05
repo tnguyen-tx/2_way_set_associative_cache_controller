@@ -41,58 +41,80 @@ module Cache (
 			   QWB			=	4'b0100,
 			   QFetch		=	4'b1000;
 
-	// Completed...You may change if needed but we recommend keeping this
 	assign req = (pr_rd || pr_wr);
 	assign pr_done = req & hit;
 	       
 
-	// You complete (change the assignments below to the appropriate logic)
-	assign hit = 1'bx ;
-	assign pr_dout = 8'bxxxxxxxx;
+	assign hit = ({1'b1,pr_tag}=={valid[pr_cblk],tag[pr_cblk]})? 1'b1:1'b0;
+	assign pr_dout = pr_word ? data[pr_cblk*2+1] : data[pr_cblk*2];
 	
-	// For each state consider any changes necessary to the registered signals:
 	//   state, valid and dirty bits, tags and data
-	// You can access a desired element of the tag, valid, or dirty array by  
-	//   using array indexes (e.g. tag[pr_cblk]). 
-	// Remember you can concatenate signals like:  { data[15:8], pr_data[7:0] } 
-	always @(posedge clk)
+	always @(posedge clk or posedge reset)
 	begin
-	if(reset)
+		if(reset) begin
 		state<=QInitial;
+				valid <= 4'b0000;
+				dirty <= 4'b0000;
+				bus_rd <= 0;
+				bus_wr <= 0;
+				for (i=0; i<4; i=i+1)
+					tag[i] <= 0;
+		end
 	else
 		case (state)
 			QInitial:
 			begin
-				valid<=4'b0000;
-				dirty<=4'b0000;
-				for (i=0; i<4; i=i+1)
-					tag[i]<=0;
-
-					state <= QMonitor;
+				if (req)state <= QMonitor;
+				else state <= QInitial;
 			end
 			QMonitor:
 			begin
-
-			
-			
+				if (hit) begin
+					if (pr_rd) begin
+					end
+					else if (pr_wr) begin
+						if (pr_word==0) data[pr_cblk*2] <= pr_din[7:0];
+						else data[pr_cblk*2+1] <= pr_din[7:0];
+						valid[pr_cblk] <= 1;
+						dirty[pr_cblk] <= 1;
+					end
+					else begin end
+						state <= QMonitor;
+				end
+				else begin
+					if (dirty[pr_cblk]==1) begin
+						state <= QWB;
+					end
+					else state <= QFetch;
+				end
 			end
-			// Hint: you only need to update signals when the WB is complete 
 			QWB:
 			begin
-
-
-
-
+				if (bus_done) begin 
+					state <= QFetch;
+					data[pr_cblk*2] <= 0;
+					data[pr_cblk*2+1] <= 0;
+					tag[pr_cblk] <= 0;
+					valid[pr_cblk] <= 0;
+					dirty[pr_cblk] <= 0;
+				end
+				else state <= QWB;
 			end			
 			
-			// Hint: you only need to update signals when the fetch is complete 
 			QFetch:
 			begin
-
-
-
+				if (bus_done == 1'b1) begin
+					data[pr_cblk*2] <= bus_din[7:0];
+					data[pr_cblk*2+1] <= bus_din[15:8];
+					tag[pr_cblk] <= bus_addr[4:2];
+					valid[pr_cblk] <= 1;
+					dirty[pr_cblk] <= 0;
+					state <= QMonitor;
+				end
+				else begin
+					state <= QFetch;
+				end
 			end
-			
 		endcase	
 	end
 	
@@ -104,29 +126,33 @@ module Cache (
 		case (state)
 			QInitial:
 			begin
-				bus_rd<=0;
-				bus_wr<=0;
-				bus_addr<=5'b0;
-				bus_dout <= 16'b0;
+				bus_rd = 0;
+				bus_wr = 0;
+				bus_addr = 5'b0;
+				bus_dout = 16'b0;
 			end
 			
 			QMonitor:
 			begin
-
-
+				bus_rd = 'bz;
+				bus_wr = 'bz;
+				bus_addr = 5'bz;
+				bus_dout = 16'bz;
 			end
 			
 			QWB:
 			begin
-
-
-
+				bus_rd = 'b0;
+				bus_wr = 'b1;
+				bus_addr = {tag[pr_cblk],pr_cblk};
+				bus_dout = {data[pr_cblk*2+1],data[pr_cblk*2]};
 			end
 			QFetch:
 			begin
-
-
-
+				bus_rd = 'b1;
+				bus_wr = 'b0;
+				bus_addr = pr_addr[5:1];
+				bus_dout = 16'bz;
 			end
 		endcase	
 	end
