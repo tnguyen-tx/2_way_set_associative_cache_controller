@@ -56,6 +56,7 @@ module Cache (
 		state<=QInitial;
 				valid <= 4'b0000;
 				dirty <= 4'b0000;
+				lru <= 2'b00;
 				bus_rd <= 0;
 				bus_wr <= 0;
 				for (i=0; i<4; i=i+1)
