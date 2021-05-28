@@ -16,7 +16,7 @@ module Cache (
 	output reg 	   	 	bus_wr,
 	output reg [4:0] 	bus_addr);
 
-	reg [2:0] tag [0:3];
+	reg [3:0] tag [0:3];
 	reg [7:0] data[0:7];
 	reg [3:0] valid ;
 	reg [3:0] dirty ;
@@ -24,17 +24,23 @@ module Cache (
 	integer i;
 	
 	reg [3:0] state;
-	wire hit;
-	wire [1:0] pr_cblk;
+	reg hit;
+	reg [1:0] pointer;
+//	wire [1:0] pointer;
     wire       pr_word;
-	wire [2:0] pr_tag;
+	//tag and set changed
+	//thuy
+	wire [3:0] pr_tag;
+	wire 		pr_set;
 	wire [4:0] pr_bus_addr;
 
 
 	// Address breakdown
-	assign pr_cblk = pr_addr[2:1];
+//	assign pointer = pr_addr[2:1];
     assign pr_word = pr_addr[0];
-	assign pr_tag = pr_addr[5:3];				
+	//tag and set distribution, thuy
+	assign pr_tag = pr_addr[5:2];				
+	assign pr_set = pr_addr[1];
 	assign pr_bus_addr = pr_addr[5:1];
 
 	localparam QInitial		= 	4'b0001,
@@ -46,9 +52,41 @@ module Cache (
 	assign pr_done = req & hit;
 	       
 
-	assign hit = ({1'b1,pr_tag}=={valid[pr_cblk],tag[pr_cblk]})? 1'b1:1'b0;
-	assign pr_dout = pr_word ? data[pr_cblk*2+1] : data[pr_cblk*2];
-	
+//	assign hit = ({1'b1,pr_tag,pr_set}=={valid[pointer],tag[pr_cblk]},())? 1'b1:1'b0;
+	assign pr_dout = pr_word ? data[pointer*2+1] : data[pointer*2];
+
+	//hit
+	always @* begin
+		if (pr_set==0) begin 
+			if (valid[0]==1'b1 && tag[0]==pr_tag) begin
+				pointer = 0;
+				hit = 1'b1;
+			end
+			else if (valid[1]==1'b1 && tag[1] == pr_tag) begin
+				pointer = 1;
+				hit = 1'b1;
+			end
+			else begin
+				pointer = 0;
+				hit = 1'b0;
+			end
+		end
+		else begin
+			if (valid[0]==1'b1 && tag[0]==pr_tag) begin
+				pointer = 2;
+				hit = 1'b1;
+			end
+			else if (valid[1]==1'b1 && tag[1] == pr_tag) begin
+				pointer = 3;
+				hit = 1'b1;
+			end
+			else begin
+				pointer = 0;
+				hit = 1'b0;
+			end
+		end
+	end
+
 	//   state, valid and dirty bits, tags and data
 	always @(posedge clk or posedge reset)
 	begin
@@ -73,40 +111,73 @@ module Cache (
 			begin
 				if (hit) begin
 					if (pr_rd) begin
-					end
-					else if (pr_wr) begin
-						if (pr_word==0) data[pr_cblk*2] <= pr_din[7:0];
-						else begin 
-							data[pr_cblk*2+1] <= pr_din[7:0];
-						end
-						case (pr_cblk)
+						case (pointer)
 							0: lru[0] <= 1;
 							1: lru[0] <= 0;
 							2: lru[1] <= 1;
 							3: lru[1] <= 0;
 						endcase
-						valid[pr_cblk] <= 1;
-						dirty[pr_cblk] <= 1;
+					end
+					else if (pr_wr) begin
+						if (pr_word==0) data[pointer*2] <= pr_din[7:0];
+						else begin 
+							data[pointer*2+1] <= pr_din[7:0];
+						end
+						case (pointer)
+							0: lru[0] <= 1;
+							1: lru[0] <= 0;
+							2: lru[1] <= 1;
+							3: lru[1] <= 0;
+						endcase
+						valid[pointer] <= 1;
+						dirty[pointer] <= 1;
 					end
 					else begin end
-						state <= QMonitor;
+						state <= QInitial;
 				end
 				else begin
-					if (dirty[pr_cblk]==1) begin
-						state <= QWB;
+					if (pr_set == 1'b0) begin
+						if (dirty[lru[0]] == 1'b1) begin
+							state <= QWB;
+						end
+						else begin
+							state <= QFetch;
+						end
 					end
-					else state <= QFetch;
+					else begin
+						if (dirty[2+lru[1]] == 1'b1) begin
+							state <= QWB;
+						end
+						else begin
+							state <= QFetch;
+						end
+					end
+
+//					if (dirty[lru]== 1b'1 ) begin
+//						state <= QWB;
+//					end
+//					else state <= QFetch;
 				end
 			end
 			QWB:
 			begin
 				if (bus_done) begin 
 					state <= QFetch;
-					data[pr_cblk*2] <= 0;
-					data[pr_cblk*2+1] <= 0;
-					tag[pr_cblk] <= 0;
-					valid[pr_cblk] <= 0;
-					dirty[pr_cblk] <= 0;
+					if (pr_set == 0) begin
+						data[lru[0]*2] <= 0;
+						data[lru[0]*2+1] <= 0;
+						tag[lru[0]] <= 0;
+						valid[lru[0]] <= 0;
+						dirty[lru[0]] <= 0;
+					end
+					else begin
+						data[4+lru[1]*2] <= 0;
+						data[4+lru[1]*2+1] <= 0;
+						tag[2+lru[1]] <= 0;
+						valid[2+lru[1]] <= 0;
+						dirty[2+lru[1]] <= 0;
+					end
+
 				end
 				else state <= QWB;
 			end			
@@ -114,15 +185,23 @@ module Cache (
 			QFetch:
 			begin
 				if (bus_done == 1'b1) begin
-					if (pr_cblk == 0 || pr_cblk == 1) begin
+					if (pointer == 0 || pointer == 1) begin
 					case (lru[0])
 							0: begin
 								data[0] <= bus_din[7:0];
 								data[1] <= bus_din[15:8];
+								tag[0] <= bus_addr[4:1];
+								valid[0] <= 1;
+								dirty[0] <= 0;
+								lru[0] <= 1;
 							end
 							1: begin
 								data[2] <= bus_din[7:0];
 								data[3] <= bus_din[15:8];
+								tag[1] <= bus_addr[4:1];
+								valid[1] <= 1;
+								dirty[1] <= 0;
+								lru[0] <= 0;
 							end
 					endcase
 					end
@@ -131,23 +210,22 @@ module Cache (
 							0: begin
 								data[4] <= bus_din[7:0];
 								data[5] <= bus_din[15:8];
+								tag[2] <= bus_addr[4:1];
+								valid[2] <= 1;
+								dirty[2] <= 0;
+								lru[1] <= 1;
 							end
 							1: begin
 								data[6] <= bus_din[7:0];
 								data[7] <= bus_din[15:8];
+								tag[3] <= bus_addr[4:1];
+								valid[3] <= 1;
+								dirty[3] <= 0;
+								lru[1] <= 0;
 							end
 					endcase
 					end
-					tag[pr_cblk] <= bus_addr[4:2];
-					valid[pr_cblk] <= 1;
-					dirty[pr_cblk] <= 0;
 					state <= QMonitor;
-					case (pr_cblk)
-						0: lru[0] <= 1;
-						1: lru[0] <= 0;
-						2: lru[1] <= 1;
-						3: lru[1] <= 0;
-					endcase
 				end
 				else begin
 					state <= QFetch;
@@ -182,8 +260,14 @@ module Cache (
 			begin
 				bus_rd = 'b0;
 				bus_wr = 'b1;
-				bus_addr = {tag[pr_cblk],pr_cblk};
-				bus_dout = {data[pr_cblk*2+1],data[pr_cblk*2]};
+				if (pr_set==0) begin
+					bus_addr = {tag[lru[0]],pr_set};
+					bus_dout = {data[lru[0]*2+1],data[lru[0]*2]};
+				end
+				else begin
+					bus_addr = {tag[lru[1]],pr_set};
+					bus_dout = {data[4+lru[1]*2+1],data[4+lru[1]*2]};
+				end
 			end
 			QFetch:
 			begin
