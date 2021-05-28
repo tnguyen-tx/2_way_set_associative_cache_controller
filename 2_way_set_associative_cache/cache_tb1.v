@@ -101,6 +101,7 @@ module cache_tb;
 		wait(cache.data[0] == 8'h00);
 		wait(cache.data[1] == 8'h01);
 		// SW 12@9;  
+		#1
 		op = "1:Store 12@9";
 		pr_addr=9;
 		pr_rd=0;
@@ -110,9 +111,9 @@ module cache_tb;
 		
 		wait(pr_done && !clk);
 		wait(pr_done && clk);
-		wait(cache.data[0] == 8'h08);
-		wait(cache.data[1] == 8'h0c);
-		
+		wait(cache.data[2] == 8'h08);
+		wait(cache.data[3] == 8'h0c);
+	#1	
 		// SW 13@9;
 		op = "2:Store 13@9";
 		pr_addr=9;
@@ -123,8 +124,8 @@ module cache_tb;
 		
 		wait(pr_done && !clk);
 		wait(pr_done && clk);
-		wait(cache.data[0] == 8'h08);
-		wait(cache.data[1] == 8'h0d);
+		wait(cache.data[2] == 8'h08);
+		wait(cache.data[3] == 8'h0d);
 		
 		// SW 14@1; WB 13-> mem[9], 4-> cache
 		op = "3:Store 14@1";
@@ -138,7 +139,7 @@ module cache_tb;
 		wait(pr_done && clk);
 		wait(cache.data[0] == 8'h00);
 		wait(cache.data[1] == 8'h0e);
-		
+		#1	
 		// LW @9; WB 14-> mem[1], mem[9]=13 -> Cache  
 		op = "4:Load @9";
 		pr_din = 8'bzzzzzzzz;
@@ -149,10 +150,11 @@ module cache_tb;
 		
 		wait(pr_done && !clk);
 		wait(pr_done && clk);
-		wait(cache.data[0] == 8'h08);
-		wait(cache.data[1] == 8'h0d);
+		wait(cache.data[2] == 8'h08);
+		wait(cache.data[3] == 8'h0d);
 		wait(pr_dout == 8'h0d);
 		
+		#1
 		// LW @8; Hit!
 		op = "5:Load @8";
 		pr_din = 8'bzzzzzzzz;
@@ -165,6 +167,7 @@ module cache_tb;
 		wait(pr_done && clk);
 		wait(pr_dout == 8'h08);
 		
+		#1
 		// SW 17@4 ; Miss
 		op = "6:Store 17@4";
 		pr_addr=4;
@@ -175,9 +178,10 @@ module cache_tb;
 		
 		wait(pr_done && !clk);
 		wait(pr_done && clk);
-		wait(cache.data[4] == 8'h11);
-		wait(cache.data[5] == 8'h05);
+		wait(cache.data[0] == 8'h11);
+		wait(cache.data[1] == 8'h05);
 		
+		#1
 		// LW @9 ; Hit
 		op = "7:Load @9";
 		pr_din = 8'bzzzzzzzz;
@@ -190,6 +194,7 @@ module cache_tb;
 		wait(pr_done && clk);
 		wait(pr_dout == 8'h0d);
 		
+		#1
 		// LW @13 ; WB 17->mem[4], mem[13] -> Cache
 		op = "8:Load @13";
 		pr_din = 8'bzzzzzzzz;
@@ -200,8 +205,8 @@ module cache_tb;
 		
 		wait(pr_done && !clk);
 		wait(pr_done && clk);
-		wait(cache.data[4] == 8'h0c);
-		wait(cache.data[5] == 8'h0d);
+		wait(cache.data[2] == 8'h0c);
+		wait(cache.data[3] == 8'h0d);
 		wait(pr_dout == 8'h0d);
 		
 		op = "9:End";
@@ -215,10 +220,7 @@ module cache_tb;
 	end
 	integer i;     
 	initial begin
-	//	$recordfile("waveform_direct_cache.trn");
-	//	$recordvars();
+		$recordfile("waveform_set_asso_cache.trn");
+		$recordvars();
 	end
 endmodule
-
-
-
