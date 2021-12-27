@@ -72,11 +72,11 @@ module Cache (
 			end
 		end
 		else begin
-			if (valid[0]==1'b1 && tag[0]==pr_tag) begin
+			if (valid[2]==1'b1 && tag[2]==pr_tag) begin
 				pointer = 2;
 				hit = 1'b1;
 			end
-			else if (valid[1]==1'b1 && tag[1] == pr_tag) begin
+			else if (valid[3]==1'b1 && tag[3] == pr_tag) begin
 				pointer = 3;
 				hit = 1'b1;
 			end
